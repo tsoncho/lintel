@@ -264,24 +264,32 @@ function LessonView({ lessonId, onAction }: { lessonId: (typeof MODULES)[number]
         return (
           <fieldset key={quiz.id} className="quiz" disabled={state.mode === "newer"}>
             <legend>{text.prompt}</legend>
-            {quiz.choiceIds.map((choiceId) => (
-              <label key={choiceId} className="quiz-choice">
-                <input
-                  type="radio"
-                  name={quiz.id}
-                  value={choiceId}
-                  checked={chosen === choiceId}
-                  onChange={() => learnStore.patch({ answers: { ...progress.answers, [quiz.id]: choiceId } })}
-                />
-                <span>{choiceText(text.choices, choiceId)}</span>
-              </label>
-            ))}
-            {chosen && (
-              <p className={correct ? "feedback ok" : "feedback"} role="status">
-                <strong>{correct ? ui.correctLabel : ui.incorrectLabel}</strong>{" "}
-                {correct ? text.correct : text.incorrect}
-              </p>
-            )}
+            <div className="quiz-choices">
+              {quiz.choiceIds.map((choiceId) => {
+                const selected = chosen === choiceId;
+                const tone = !selected ? "" : correct ? " is-correct" : " is-wrong";
+                return (
+                  <label key={choiceId} className={`quiz-choice${tone}`}>
+                    <input
+                      type="radio"
+                      name={quiz.id}
+                      value={choiceId}
+                      checked={selected}
+                      onChange={() => learnStore.patch({ answers: { ...progress.answers, [quiz.id]: choiceId } })}
+                    />
+                    <span>{choiceText(text.choices, choiceId)}</span>
+                  </label>
+                );
+              })}
+            </div>
+            <div className="quiz-feedback" aria-live="polite">
+              {chosen ? (
+                <p className={correct ? "feedback ok" : "feedback"}>
+                  <strong>{correct ? ui.correctLabel : ui.incorrectLabel}</strong>{" "}
+                  {correct ? text.correct : text.incorrect}
+                </p>
+              ) : null}
+            </div>
           </fieldset>
         );
       })}
