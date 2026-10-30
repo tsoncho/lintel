@@ -1,0 +1,15 @@
+export const DEFAULTS = {
+  wallThickness: 200,
+  wallHeight: 3000,
+  doorWidth: 900,
+  doorHeight: 2100,
+  doorSill: 0,
+  windowWidth: 1200,
+  windowHeight: 1200,
+  windowSill: 900,
+  slabThickness: 200,
+  storyHeight: 3000,
+  gridSize: 100,
+  minOpeningHeight: 200,
+  minDoorHeight: 1800,
+} as const;
