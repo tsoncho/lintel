@@ -26,11 +26,13 @@ export function StartScreen({ onLearn }: { onLearn: () => void }) {
         <h1>Lintel</h1>
         <p className="lede">
           Draw a plan, look at the same building in 3D, and keep the model in a file you can reopen.
-          North is up. Distances are stored in millimeters.
         </p>
+        <p className="start-facts">North is up · Distances stay in millimeters · Plan, 3D, and section share one model</p>
         <div className="start-actions">
           <button type="button" className="btn primary" onClick={() => setNaming(true)}>New project</button>
           <button type="button" className="btn" onClick={() => void openProject()}>Open</button>
+        </div>
+        <div className="start-actions">
           <button type="button" className="btn" onClick={() => void openSampleProject()}>Open Courtyard Studio</button>
           <button type="button" className="btn" onClick={onLearn}>Learn / Учи</button>
         </div>

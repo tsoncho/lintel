@@ -101,6 +101,16 @@ export function LearnScreen({ onClose }: { onClose: () => void }) {
         </p>
         <button type="button" className="btn tiny learn-close" onClick={onClose}>{ui.close}</button>
       </header>
+      <div
+        className="learn-meter"
+        role="progressbar"
+        aria-label={ui.progressLabel}
+        aria-valuemin={0}
+        aria-valuemax={counts.total}
+        aria-valuenow={counts.done}
+      >
+        <span style={{ width: `${counts.total ? (counts.done / counts.total) * 100 : 0}%` }} />
+      </div>
       {state.mode === "newer" && <p className="learn-banner" role="status">{ui.newerProgress}</p>}
       {issues.length > 0 && (
         <div className="learn-banner" role="alert">
@@ -124,7 +134,7 @@ export function LearnScreen({ onClose }: { onClose: () => void }) {
                     <li key={id}>
                       <button
                         type="button"
-                        className="nav-item child"
+                        className={progress.completed.includes(id) ? "nav-item child done" : "nav-item child"}
                         aria-current={progress.view === "lesson" && progress.lessonId === id ? "page" : undefined}
                         onClick={() => learnStore.patch({ view: "lesson", lessonId: id })}
                       >
@@ -138,7 +148,7 @@ export function LearnScreen({ onClose }: { onClose: () => void }) {
             );
           })}
         </nav>
-        <main className="learn-main" id="learn-main">
+        <main className="learn-main" id="learn-main" key={`${locale}:${progress.view}:${lessonId ?? ""}`}>
           {progress.view === "glossary" ? (
             <GlossaryView locale={locale} query={query} onQuery={setQuery} />
           ) : progress.view === "lesson" && lessonId ? (

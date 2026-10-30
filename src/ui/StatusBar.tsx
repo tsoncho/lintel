@@ -11,7 +11,7 @@ export function StatusBar() {
     : "E —   N —";
   return (
     <footer className="status-bar" aria-live="polite">
-      <span className={state.statusTone === "error" ? "status-text error" : "status-text"}>{state.status || toolHint(state.tool)}</span>
+      <span className={`status-text${state.statusTone === "error" ? " error" : state.statusTone === "ok" ? " ok" : ""}`}>{state.status || toolHint(state.tool)}</span>
       <span className="coords">{state.view === "plan" ? coords : "Drag to orbit · right-drag to pan"}</span>
       <span className="status-tools">
         <button type="button" className={state.snapGrid ? "chip on" : "chip"} aria-pressed={state.snapGrid} onClick={() => editor.toggleSnapGrid()}>Grid snap</button>

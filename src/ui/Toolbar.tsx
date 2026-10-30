@@ -16,6 +16,7 @@ export function Toolbar({ assistantOpen, onToggleAssistant }: { assistantOpen: b
   const levels = state.project ? stories(state.project) : [];
   return (
     <div className="toolbar" role="toolbar" aria-label="Drawing tools">
+      <div className="tool-group">
       {TOOLS.map((tool) => (
         <button
           key={tool.id}
@@ -29,6 +30,7 @@ export function Toolbar({ assistantOpen, onToggleAssistant }: { assistantOpen: b
           {tool.label}
         </button>
       ))}
+      </div>
       <span className="toolbar-gap" />
       <label className="story-pick">
         <span>Story</span>
