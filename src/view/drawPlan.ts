@@ -1,6 +1,7 @@
 import { doorSwing, polygonCentroid, wallCorners, wallFrame, wallLength } from "../domain/geometry";
+import { exteriorEdges, wallSolids } from "../domain/joins";
 import { hostedOpenings, stories } from "../domain/queries";
-import type { Door, Element, Project, Vec2, Wall, Window } from "../domain/types";
+import type { Door, Element, Project, Section, Vec2, Wall, Window } from "../domain/types";
 import { formatArea, formatLength } from "../domain/units";
 import { polygonArea } from "../domain/geometry";
 import { visibleWorld, worldToScreen, type Viewport } from "./viewport";
@@ -11,7 +12,7 @@ const SELECT = "#9a4318";
 const PREVIEW = "#c45c26";
 
 export interface DraftGraphic {
-  tool: "wall" | "slab" | "room";
+  tool: "wall" | "slab" | "room" | "section";
   points: Vec2[];
   cursor: Vec2 | null;
 }
@@ -44,6 +45,7 @@ export function drawPlan(ctx: CanvasRenderingContext2D, view: Viewport, scene: P
   drawGridlines(ctx, view, scene.project);
   if (scene.ghostStories) drawGhostWalls(ctx, view, scene);
   drawStory(ctx, view, scene, scene.activeStoryId, false);
+  drawSections(ctx, view, scene.project);
   if (scene.draft) drawDraft(ctx, view, scene);
   if (scene.opening) drawOpeningPreview(ctx, view, scene);
   drawSelection(ctx, view, scene);
@@ -59,11 +61,26 @@ function drawStory(ctx: CanvasRenderingContext2D, view: Viewport, scene: PlanSce
   }
   for (const element of scene.project.elements) {
     if (element.type === "room" && element.storyId === storyId) {
-      drawRoom(ctx, view, element.outline, element.name, element.number, scene.selection.includes(element.id));
+      drawRoom(ctx, view, element.outline, element.name, element.number, scene.selection.includes(element.id), element.sync === "detached");
     }
   }
-  for (const element of scene.project.elements) {
-    if (element.type === "wall" && element.storyId === storyId) drawWall(ctx, view, scene.project, element, scene.selection.includes(element.id));
+  const walls = scene.project.elements.filter((element): element is Wall => element.type === "wall" && element.storyId === storyId);
+  const solids = wallSolids(walls);
+  for (const solid of solids) {
+    const wall = walls.find((item) => item.id === solid.id);
+    if (wall) drawWall(ctx, view, scene.project, wall, solid.footprint, scene.selection.includes(wall.id));
+  }
+  if (!ghost) {
+    ctx.strokeStyle = "#241f1b";
+    ctx.lineWidth = 1.25;
+    ctx.beginPath();
+    for (const [startPoint, endPoint] of exteriorEdges(solids.map((item) => item.footprint))) {
+      const start = worldToScreen(view, startPoint);
+      const end = worldToScreen(view, endPoint);
+      ctx.moveTo(start.x, start.y);
+      ctx.lineTo(end.x, end.y);
+    }
+    ctx.stroke();
   }
   ctx.restore();
 }
@@ -91,6 +108,7 @@ function drawRoom(
   name: string,
   number: string,
   selected: boolean,
+  detached: boolean,
 ) {
   trace(ctx, view, outline, true);
   ctx.fillStyle = "rgba(70, 122, 86, 0.16)";
@@ -108,13 +126,11 @@ function drawRoom(
   ctx.fillText(`${number}  ${name}`, center.x, center.y - 8);
   ctx.font = "12px Segoe UI, sans-serif";
   ctx.fillStyle = "#3d4f43";
-  ctx.fillText(formatArea(polygonArea(outline)), center.x, center.y + 10);
+  ctx.fillText(detached ? "Boundary lost" : formatArea(polygonArea(outline)), center.x, center.y + 10);
 }
 
-function drawWall(ctx: CanvasRenderingContext2D, view: Viewport, project: Project, wall: Wall, selected: boolean) {
-  const corners = wallCorners(wall);
-  if (!corners) return;
-  trace(ctx, view, corners, true);
+function drawWall(ctx: CanvasRenderingContext2D, view: Viewport, project: Project, wall: Wall, footprint: Vec2[], selected: boolean) {
+  trace(ctx, view, footprint, true);
   ctx.fillStyle = selected ? "#4a4036" : "#3a352f";
   ctx.fill();
   const openings = hostedOpenings(project, wall.id);
@@ -128,7 +144,7 @@ function drawWall(ctx: CanvasRenderingContext2D, view: Viewport, project: Projec
     if (opening.type === "door") drawDoor(ctx, view, wall, opening);
   }
   if (selected) {
-    trace(ctx, view, corners, true);
+    trace(ctx, view, footprint, true);
     ctx.lineWidth = 2;
     ctx.strokeStyle = SELECT;
     ctx.stroke();
@@ -369,6 +385,47 @@ function drawSnap(ctx: CanvasRenderingContext2D, view: Viewport, point: Vec2) {
   ctx.strokeStyle = PREVIEW;
   ctx.lineWidth = 1.5;
   ctx.strokeRect(screen.x - 5, screen.y - 5, 10, 10);
+}
+
+function drawSections(ctx: CanvasRenderingContext2D, view: Viewport, project: Project) {
+  for (const element of project.elements) {
+    if (element.type !== "section") continue;
+    drawSectionLine(ctx, view, element);
+  }
+}
+
+function drawSectionLine(ctx: CanvasRenderingContext2D, view: Viewport, section: Section) {
+  const frame = wallFrame(section);
+  if (!frame) return;
+  const normal = section.facing === "left" ? 1 : -1;
+  const band = [
+    section.start,
+    section.end,
+    pointOffset(section.end, frame, section.depth * normal),
+    pointOffset(section.start, frame, section.depth * normal),
+  ];
+  trace(ctx, view, band, true);
+  ctx.fillStyle = "rgba(154, 67, 24, 0.08)";
+  ctx.fill();
+  const a = worldToScreen(view, section.start);
+  const b = worldToScreen(view, section.end);
+  ctx.strokeStyle = SELECT;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.stroke();
+  const mid = worldToScreen(view, { x: (section.start.x + section.end.x) / 2, y: (section.start.y + section.end.y) / 2 });
+  const tip = worldToScreen(view, pointOffset({ x: (section.start.x + section.end.x) / 2, y: (section.start.y + section.end.y) / 2 }, frame, 400 * normal));
+  ctx.beginPath();
+  ctx.moveTo(mid.x, mid.y);
+  ctx.lineTo(tip.x, tip.y);
+  ctx.stroke();
+  label(ctx, section.name, mid.x, mid.y - 16, SELECT);
+}
+
+function pointOffset(point: Vec2, frame: { nx: number; ny: number }, distance: number): Vec2 {
+  return { x: point.x + frame.nx * distance, y: point.y + frame.ny * distance };
 }
 
 function drawNorth(ctx: CanvasRenderingContext2D) {

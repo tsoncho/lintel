@@ -29,6 +29,8 @@ export interface PropertyPatch {
   storyId?: string;
   hinge?: "start" | "end";
   swing?: "left" | "right";
+  facing?: "left" | "right";
+  depth?: number;
   start?: Vec2;
   end?: Vec2;
 }
@@ -41,6 +43,7 @@ const PATCH_KEYS: Record<string, (keyof PropertyPatch)[]> = {
   room: ["name", "number", "storyId"],
   door: ["offset", "width", "height", "sill", "hinge", "swing"],
   window: ["offset", "width", "height", "sill"],
+  section: ["name", "depth", "facing"],
 };
 
 function cloneProject(project: Project): Project {
@@ -128,6 +131,11 @@ function applyPatch(element: Exclude<Element, { preserved: true }>, patch: Prope
       return true;
     case "window":
       assignOpening(element, patch);
+      return true;
+    case "section":
+      if (patch.name !== undefined) element.name = patch.name.trim();
+      if (patch.depth !== undefined) element.depth = roundMm(patch.depth);
+      if (patch.facing !== undefined) element.facing = patch.facing;
       return true;
     default:
       return "This element cannot be edited.";
@@ -242,7 +250,17 @@ export function addSlab(
 
 export function addRoom(
   project: Project,
-  input: { storyId: string; outline: Vec2[]; name?: string; number?: string; id?: string },
+  input: {
+    storyId: string;
+    outline: Vec2[];
+    name?: string;
+    number?: string;
+    id?: string;
+    source?: "manual" | "derived";
+    boundaryWallIds?: string[];
+    areaMm2?: number;
+    perimeterMm?: number;
+  },
 ): Result<Created> {
   const story = stories(project).find((item) => item.id === input.storyId);
   if (!story) return err(`No story with id ${input.storyId}.`);
@@ -258,10 +276,65 @@ export function addRoom(
     name: (input.name ?? "Room").trim(),
     number: (input.number ?? String(count).padStart(2, "0")).trim(),
     outline,
+    source: input.source ?? "manual",
+    boundaryWallIds: input.boundaryWallIds,
+    areaMm2: input.areaMm2,
+    perimeterMm: input.perimeterMm,
+    sync: input.source === "derived" ? "current" : undefined,
   });
   const committed = commit(draft);
   if (!committed.ok) return committed;
   return ok({ project: committed.value, id });
+}
+
+export function addDerivedRooms(
+  project: Project,
+  rooms: {
+    storyId: string;
+    outline: Vec2[];
+    name: string;
+    number: string;
+    boundaryWallIds: string[];
+    areaMm2: number;
+    perimeterMm: number;
+  }[],
+): Result<Project> {
+  let current = project;
+  for (const room of rooms) {
+    const created = addRoom(current, { ...room, source: "derived" });
+    if (!created.ok) return created;
+    current = created.value.project;
+  }
+  return ok(current);
+}
+
+export function addSection(
+  project: Project,
+  input: { name?: string; start: Vec2; end: Vec2; depth?: number; facing?: "left" | "right"; id?: string },
+): Result<Created> {
+  const draft = cloneProject(project);
+  const count = draft.elements.filter((element) => element.type === "section").length + 1;
+  const id = input.id ?? createId("section");
+  draft.elements.push({
+    id,
+    type: "section",
+    name: (input.name ?? `Section ${count}`).trim(),
+    start: roundPoint(input.start),
+    end: roundPoint(input.end),
+    depth: roundMm(input.depth ?? 6000),
+    facing: input.facing ?? "left",
+  });
+  const committed = commit(draft);
+  if (!committed.ok) return committed;
+  return ok({ project: committed.value, id });
+}
+
+export function setSectionEndpoint(project: Project, sectionId: string, which: "start" | "end", point: Vec2): Result<Project> {
+  const located = mutate(project, sectionId);
+  if ("error" in located) return err(located.error);
+  if (located.element.type !== "section") return err("Only a section line has these endpoints.");
+  located.element[which] = roundPoint(point);
+  return commit(located.draft);
 }
 
 function addOutline(
@@ -390,6 +463,10 @@ export function translateElements(project: Project, ids: string[], delta: Vec2):
       const dy = wall.end.y - wall.start.y;
       const along = (delta.x * dx + delta.y * dy) / length;
       element.offset = roundMm(element.offset + along);
+      moved += 1;
+    } else if (element.type === "section") {
+      element.start = roundPoint({ x: element.start.x + delta.x, y: element.start.y + delta.y });
+      element.end = roundPoint({ x: element.end.x + delta.x, y: element.end.y + delta.y });
       moved += 1;
     }
   }

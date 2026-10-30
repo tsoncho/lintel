@@ -5,12 +5,14 @@ import { applyPropertyPatch } from "../domain/edits";
 import { pushHistory, redoHistory, undoAssistantHistory, undoHistory, type HistoryEntry } from "../domain/history";
 import { createId } from "../domain/ids";
 import { stories } from "../domain/queries";
+import { syncDerivedRooms } from "../domain/spaces";
 import { ok, type Result } from "../domain/result";
 import { createEmptyProject, createSampleProject } from "../domain/sample";
 import type { DisplayUnit, Project, ProjectFile } from "../domain/types";
+import { SCHEMA_VERSION } from "../domain/types";
 import { parseProjectFile, projectFingerprint, serializeProjectFile, wrapProject } from "../persistence/file";
 
-export type ToolId = "select" | "wall" | "slab" | "door" | "window" | "room";
+export type ToolId = "select" | "wall" | "slab" | "door" | "window" | "room" | "section";
 export type StatusTone = "neutral" | "ok" | "error";
 
 export interface EditorState {
@@ -25,7 +27,8 @@ export interface EditorState {
   selection: string[];
   activeStoryId: string | null;
   tool: ToolId;
-  view: "plan" | "model";
+  view: "plan" | "model" | "section";
+  activeSectionId: string | null;
   snapGrid: boolean;
   snapPoints: boolean;
   gridSize: number;
@@ -53,6 +56,7 @@ function initialState(): EditorState {
     activeStoryId: null,
     tool: "select",
     view: "plan",
+    activeSectionId: null,
     snapGrid: true,
     snapPoints: true,
     gridSize: DEFAULTS.gridSize,
@@ -95,6 +99,7 @@ function adopt(file: ProjectFile, path: string | null, guide: boolean, status: s
     activeStoryId: stories(file.project)[0]?.id ?? null,
     tool: "select",
     view: "plan",
+    activeSectionId: null,
     showGuide: guide,
     fitToken: state.fitToken + 1,
     version: state.version + 1,
@@ -132,11 +137,14 @@ export const editor = {
   setTool(tool: ToolId) {
     patch({ tool, status: toolHint(tool), statusTone: "neutral" });
   },
-  setView(view: "plan" | "model") {
+  setView(view: "plan" | "model" | "section") {
     patch({ view });
   },
+  setActiveSection(activeSectionId: string) {
+    patch({ activeSectionId, view: "section" });
+  },
   setStory(activeStoryId: string) {
-    patch({ activeStoryId, view: state.view === "model" ? "model" : "plan" });
+    patch({ activeStoryId });
   },
   select(selection: string[]) {
     patch({ selection });
@@ -173,7 +181,10 @@ export const editor = {
       patch({ loadErrors: loaded.errors, status: loaded.errors[0] ?? "The file could not be opened.", statusTone: "error" });
       return false;
     }
-    adopt(loaded.file, path, false, `Opened ${loaded.file.project.name}.`);
+    const migrated = loaded.migratedFrom
+      ? ` Opened from schema version ${loaded.migratedFrom}. Saving stores version ${SCHEMA_VERSION}; the file on disk is unchanged until you save.`
+      : "";
+    adopt(loaded.file, path, false, `Opened ${loaded.file.project.name}.${migrated}`);
     return true;
   },
   closeToStart() {
@@ -208,7 +219,7 @@ export const editor = {
       patch({ status: result.error, statusTone: "error" });
       return false;
     }
-    const stamped: Project = { ...result.value, updatedAt: new Date().toISOString() };
+    const stamped: Project = { ...syncDerivedRooms(result.value), updatedAt: new Date().toISOString() };
     const next = pushHistory(
       { project: state.project, past: state.past, future: state.future },
       { id: createId("hist"), label, source, after: stamped },
@@ -308,6 +319,8 @@ export function toolHint(tool: ToolId): string {
       return "Click corners, then Enter or click the first point to close the slab.";
     case "room":
       return "Click the room outline, then Enter or click the first point to close it.";
+    case "section":
+      return "Click the start of a section line, then the end. The flag shows which way the view looks.";
     case "door":
       return "Click a wall to place a 900 × 2100 mm door.";
     case "window":

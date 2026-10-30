@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { DEFAULTS } from "../domain/defaults";
-import { addOpening, addRoom, addSlab, addWall, setOutlinePoint, setWallEndpoint, translateElements } from "../domain/edits";
+import { addOpening, addRoom, addSection, addSlab, addWall, setOutlinePoint, setSectionEndpoint, setWallEndpoint, translateElements } from "../domain/edits";
 import { distance, roundMm, samePoint } from "../domain/geometry";
 import { storyBounds } from "../domain/queries";
 import { ok } from "../domain/result";
@@ -152,7 +152,9 @@ export function PlanCanvas() {
         const wall = active.base.elements.find((element) => element.id === active.id);
         const fixed = wall && wall.type === "wall" ? (active.which === "start" ? wall.end : wall.start) : null;
         const point = snapped(raw, fixed, event.shiftKey).point;
-        const moved = setWallEndpoint(active.base, active.id, active.which, point);
+        const moved = wall?.type === "section"
+          ? setSectionEndpoint(active.base, active.id, active.which, point)
+          : setWallEndpoint(active.base, active.id, active.which, point);
         if (moved.ok) {
           drag.preview = moved.value;
           preview = moved.value;
@@ -215,6 +217,7 @@ export function PlanCanvas() {
       const anchor = draft?.points[draft.points.length - 1] ?? null;
       const point = snapped(raw, anchor, event.shiftKey).point;
       if (current.tool === "wall") placeWall(point);
+      if (current.tool === "section") placeSection(point);
       if (current.tool === "slab" || current.tool === "room") placeCorner(current.tool, point);
       if (current.tool === "door" || current.tool === "window") {
         const nearest = nearestWall(current.project, current.activeStoryId, raw, view.zoom);
@@ -227,6 +230,27 @@ export function PlanCanvas() {
         else editor.apply(result.value.note ?? `Placed ${current.tool}`, "user", ok(result.value.project), [result.value.id]);
       }
       redraw();
+    };
+
+    const placeSection = (point: Vec2) => {
+      const current = editor.getState();
+      if (!current.project) return;
+      if (!draft || draft.tool !== "section" || !draft.points[0]) {
+        draft = { tool: "section", points: [point], cursor: point };
+        return;
+      }
+      const start = draft.points[0];
+      if (distance(start, point) < 200) {
+        editor.setStatus("A section line needs to be at least 200 mm.", "error");
+        return;
+      }
+      const result = addSection(current.project, { start, end: point });
+      if (!result.ok) editor.setStatus(result.error, "error");
+      else {
+        editor.apply("Add section", "user", ok(result.value.project), [result.value.id]);
+        editor.setActiveSection(result.value.id);
+      }
+      draft = null;
     };
 
     const placeWall = (point: Vec2) => {
@@ -265,7 +289,7 @@ export function PlanCanvas() {
     const closeShape = () => {
       const current = editor.getState();
       if (!draft || !current.project || !current.activeStoryId) return false;
-      if (draft.tool === "wall") return false;
+      if (draft.tool === "wall" || draft.tool === "section") return false;
       if (draft.points.length < 3) {
         editor.setStatus("An outline needs at least 3 points.", "error");
         return true;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { wallLength, polygonArea } from "../domain/geometry";
+import { wallLength, polygonArea, distance } from "../domain/geometry";
 import { elementById, hostedOpenings, stories } from "../domain/queries";
 import { editor, useEditor } from "../state/editor";
 import { isUnknownElement, type DisplayUnit, type Element } from "../domain/types";
@@ -105,7 +105,29 @@ function ElementFields({ element, unit }: { element: Element; unit: DisplayUnit 
           <StorySelect value={element.storyId} onChange={(storyId) => commit({ storyId }, "Move room to another story")} />
           <TextField label="Name" value={element.name} onCommit={(name) => commit({ name }, "Rename room")} />
           <TextField label="Number" value={element.number} onCommit={(number) => commit({ number }, "Change room number")} />
-          <p className="meta">Area {formatArea(polygonArea(element.outline))}, calculated from this outline. Rooms are not detected from walls.</p>
+          <p className="meta">
+            Area {formatArea(polygonArea(element.outline))}. Perimeter {formatLength(perimeterOf(element.outline), unit)}.
+            {element.source === "derived"
+              ? element.sync === "detached"
+                ? " This room was derived from walls, but that loop no longer closes. The last outline is kept."
+                : " Derived from the wall loop. Area and perimeter update when those walls change."
+              : " Drawn outline. It does not follow the walls."}
+          </p>
+        </>
+      )}
+      {element.type === "section" && (
+        <>
+          <TextField label="Name" value={element.name} onCommit={(name) => commit({ name }, "Rename section")} />
+          <LengthField label="View depth" mm={element.depth} unit={unit} onCommit={(depth) => commit({ depth }, "Change section depth")} />
+          <label className="field">
+            <span>Looking</span>
+            <select value={element.facing} onChange={(event) => commit({ facing: event.target.value as "left" | "right" }, "Flip section")}>
+              <option value="left">Left of the line</option>
+              <option value="right">Right of the line</option>
+            </select>
+            <small>The section cuts every story. Rooms are labels where the cut crosses them. Preserved elements are omitted.</small>
+          </label>
+          <button type="button" className="btn" onClick={() => editor.setActiveSection(element.id)}>Open section</button>
         </>
       )}
       {(element.type === "door" || element.type === "window") && (
@@ -138,6 +160,12 @@ function ElementFields({ element, unit }: { element: Element; unit: DisplayUnit 
       <button type="button" className="btn danger" onClick={() => editor.deleteIds([element.id])}>Delete</button>
     </div>
   );
+}
+
+function perimeterOf(points: { x: number; y: number }[]): number {
+  let total = 0;
+  for (let index = 0; index < points.length; index += 1) total += distance(points[index], points[(index + 1) % points.length]);
+  return total;
 }
 
 function deleteStory(id: string, name: string) {

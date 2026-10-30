@@ -51,6 +51,11 @@ export function hitTestPlan(
 
   const gridTolerance = 8 / view.zoom;
   for (const element of project.elements) {
+    if (element.type !== "section") continue;
+    const projected = projectToSegment(world, element.start, element.end);
+    if (projected.distance <= gridTolerance) return { kind: "element", id: element.id };
+  }
+  for (const element of project.elements) {
     if (element.type !== "gridline") continue;
     const delta = element.axis === "x" ? Math.abs(world.x - element.position) : Math.abs(world.y - element.position);
     if (delta <= gridTolerance) return { kind: "element", id: element.id };
@@ -90,6 +95,10 @@ function hitHandle(project: Project, id: string, world: Vec2, view: Viewport): P
     for (let index = 0; index < element.outline.length; index += 1) {
       if (distance(world, element.outline[index]) <= tolerance) return { kind: "handle", id, handle: index };
     }
+  }
+  if (element.type === "section") {
+    if (distance(world, element.start) <= tolerance) return { kind: "handle", id, handle: "start" };
+    if (distance(world, element.end) <= tolerance) return { kind: "handle", id, handle: "end" };
   }
   return null;
 }

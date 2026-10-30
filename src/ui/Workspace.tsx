@@ -9,6 +9,7 @@ import { editor, useEditor, type ToolId } from "../state/editor";
 import { drawing } from "../view/drawing";
 import { PlanCanvas } from "../view/PlanCanvas";
 import { View3D } from "../view/View3D";
+import { SectionCanvas } from "../view/SectionCanvas";
 import { Assistant, SettingsDialog } from "./Assistant";
 import { MenuBar } from "./MenuBar";
 import { Modal } from "./Modal";
@@ -25,7 +26,7 @@ interface Panels {
   assistant: number;
 }
 
-export function Workspace() {
+export function Workspace({ onLearn }: { onLearn: () => void }) {
   const state = useEditor();
   const [panels, setPanels] = useState<Panels>(() => readPanels());
   const [naming, setNaming] = useState(false);
@@ -118,10 +119,11 @@ export function Workspace() {
         return;
       }
       if (event.metaKey || event.ctrlKey || event.altKey) return;
-      const tools: Record<string, ToolId> = { v: "select", w: "wall", s: "slab", d: "door", n: "window", r: "room" };
+      const tools: Record<string, ToolId> = { v: "select", w: "wall", s: "slab", d: "door", n: "window", r: "room", c: "section" };
       if (tools[key]) editor.setTool(tools[key]);
       if (key === "1") editor.setView("plan");
       if (key === "2") editor.setView("model");
+      if (key === "3") editor.setView("section");
       if (key === "f") editor.requestFit();
       if (event.key === "ArrowLeft") drawing.panBy(40, 0);
       if (event.key === "ArrowRight") drawing.panBy(-40, 0);
@@ -162,6 +164,7 @@ export function Workspace() {
         onShortcuts={() => setShortcuts(true)}
         onSettings={() => setSettings(true)}
         onAbout={() => setAbout(true)}
+        onLearn={onLearn}
       />
       <Toolbar assistantOpen={panels.assistant > 0} onToggleAssistant={() => setPanels((current) => ({ ...current, assistant: current.assistant > 0 ? 0 : 220 }))} />
       <div
@@ -174,6 +177,7 @@ export function Workspace() {
           <div className="view-stack">
             <div className={state.view === "plan" ? "view active" : "view inactive"}><PlanCanvas /></div>
             <div className={state.view === "model" ? "view active" : "view inactive"}><View3D /></div>
+            <div className={state.view === "section" ? "view active" : "view inactive"}><SectionCanvas /></div>
             {state.view === "plan" && wallCount === 0 && (
               <div className="empty-plan">
                 <strong>This story has no walls yet.</strong>

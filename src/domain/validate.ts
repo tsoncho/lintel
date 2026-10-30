@@ -134,7 +134,19 @@ function validateKnown(element: Exclude<Element, { preserved: true }>, errors: s
       } else {
         if (!element.name.trim() || element.name.length > LIMITS.name) errors.push(`Room ${element.id} needs a name.`);
         if (!element.number.trim() || element.number.length > LIMITS.roomNumber) errors.push(`Room ${element.id} needs a number.`);
+        if (element.source && element.source !== "manual" && element.source !== "derived") errors.push(`Room ${element.id} source is invalid.`);
+        if (element.source === "derived" && !element.boundaryWallIds?.length) errors.push(`Derived room ${element.id} needs the wall ids of its boundary.`);
+        if (element.sync && element.sync !== "current" && element.sync !== "detached") errors.push(`Room ${element.id} sync state is invalid.`);
       }
+      break;
+    case "section":
+      if (!element.name.trim() || element.name.length > LIMITS.name) errors.push(`Section ${element.id} needs a name.`);
+      if (!finiteCoord(element.start.x) || !finiteCoord(element.start.y) || !finiteCoord(element.end.x) || !finiteCoord(element.end.y)) {
+        errors.push(`Section ${element.id} has a coordinate out of range.`);
+      }
+      if (wallLength(element) < 200) errors.push(`Section ${element.id} is shorter than 200 mm.`);
+      if (!inRange(element.depth, [100, 100_000])) errors.push(`Section ${element.id} depth is out of range.`);
+      if (element.facing !== "left" && element.facing !== "right") errors.push(`Section ${element.id} facing must be left or right.`);
       break;
     case "door":
     case "window":

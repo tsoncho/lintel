@@ -1,10 +1,17 @@
+import { addDerivedRooms } from "../domain/edits";
 import { elementsOnStory, stories } from "../domain/queries";
+import { detectSpaces } from "../domain/spaces";
+import { formatArea } from "../domain/units";
 import { editor, useEditor } from "../state/editor";
 import { isUnknownElement, type Element } from "../domain/types";
+import { ok } from "../domain/result";
+import { Modal } from "./Modal";
+import { useState } from "react";
 
 export function Navigator() {
   const state = useEditor();
   const project = state.project;
+  const [finder, setFinder] = useState(false);
   if (!project) return null;
   const grids = project.elements.filter((element) => element.type === "gridline");
   const preserved = project.elements.filter(isUnknownElement);
@@ -17,9 +24,11 @@ export function Navigator() {
         <h3>Views</h3>
         <button type="button" className={state.view === "plan" ? "nav-item active" : "nav-item"} onClick={() => editor.setView("plan")}>Plan</button>
         <button type="button" className={state.view === "model" ? "nav-item active" : "nav-item"} onClick={() => editor.setView("model")}>3D model</button>
+        <button type="button" className={state.view === "section" ? "nav-item active" : "nav-item"} onClick={() => editor.setView("section")}>Section</button>
       </section>
       <section>
         <h3>Stories</h3>
+        <button type="button" className="nav-item" onClick={() => setFinder(true)}>Find rooms on this story</button>
         {stories(project).map((story) => (
           <div key={story.id} className="story-block">
             <button
@@ -53,6 +62,20 @@ export function Navigator() {
         ))}
       </section>
       <section>
+        <h3>Sections</h3>
+        {project.elements.filter((element) => element.type === "section").length === 0 && <p className="muted">No section lines yet.</p>}
+        {project.elements.filter((element) => element.type === "section").map((section) => (
+          <button
+            key={section.id}
+            type="button"
+            className={state.selection.includes(section.id) ? "nav-item active" : "nav-item"}
+            onClick={() => editor.setActiveSection(section.id)}
+          >
+            {section.name}
+          </button>
+        ))}
+      </section>
+      <section>
         <h3>Grids</h3>
         {grids.length === 0 && <p className="muted">No gridlines yet.</p>}
         {grids.map((grid) => (
@@ -79,6 +102,7 @@ export function Navigator() {
           ))}
         </section>
       )}
+      {finder && <RoomFinder storyId={state.activeStoryId} onClose={() => setFinder(false)} />}
     </nav>
   );
 }
@@ -91,4 +115,60 @@ function labelFor(element: Element): string {
   if (element.type === "wall") return "Wall";
   if (element.type === "slab") return "Slab";
   return element.type;
+}
+
+function RoomFinder({ storyId, onClose }: { storyId: string | null; onClose: () => void }) {
+  const project = useEditor().project;
+  const report = project && storyId ? detectSpaces(project, storyId) : { spaces: [], openEnds: [], notes: ["Choose a story first."] };
+  const [picked, setPicked] = useState<boolean[]>(() => report.spaces.map(() => true));
+  return (
+    <Modal title="Rooms from walls" onClose={onClose}>
+      <p className="meta">These outlines are inset to the inner face of the walls. Nothing is created until you confirm. Open ends are left alone.</p>
+      {report.notes.map((note) => <p key={note}>{note}</p>)}
+      {report.spaces.length === 0 && <p>No closed room was found on this story.</p>}
+      <ul className="recent-list">
+        {report.spaces.map((space, index) => (
+          <li key={space.wallIds.join("-")}>
+            <label className="field">
+              <span>
+                <input
+                  type="checkbox"
+                  checked={picked[index] ?? false}
+                  onChange={(event) => setPicked((current) => current.map((value, item) => item === index ? event.target.checked : value))}
+                />
+                {" "}Space {index + 1} · {formatArea(space.areaMm2)} · {space.wallIds.length} walls
+              </span>
+            </label>
+          </li>
+        ))}
+      </ul>
+      <div className="row end">
+        <button type="button" className="btn" onClick={onClose}>Cancel</button>
+        <button
+          type="button"
+          className="btn primary"
+          disabled={!project || !report.spaces.some((_, index) => picked[index])}
+          onClick={() => {
+            if (!project) return;
+            const chosen = report.spaces.filter((_, index) => picked[index]);
+            const existing = project.elements.filter((element) => element.type === "room").length;
+            const result = addDerivedRooms(project, chosen.map((space, index) => ({
+              storyId: space.storyId,
+              outline: space.outline,
+              name: `Room ${existing + index + 1}`,
+              number: String(existing + index + 1).padStart(2, "0"),
+              boundaryWallIds: space.wallIds,
+              areaMm2: Math.round(space.areaMm2),
+              perimeterMm: space.perimeterMm,
+            })));
+            if (!result.ok) editor.setStatus(result.error, "error");
+            else editor.apply(`Create ${chosen.length} room${chosen.length === 1 ? "" : "s"} from walls`, "user", ok(result.value));
+            onClose();
+          }}
+        >
+          Create selected
+        </button>
+      </div>
+    </Modal>
+  );
 }

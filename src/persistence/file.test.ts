@@ -17,15 +17,32 @@ describe("project files", () => {
     expect(serializeProjectFile(second.file)).toBe(again);
   });
 
+  it("loads a version 1 file and saves it as version 2 without dropping rooms", () => {
+    const current = JSON.parse(serializeProjectFile(wrapProject(createSampleProject()))) as {
+      schemaVersion: number;
+      project: { elements: { type: string }[] };
+    };
+    current.schemaVersion = 1;
+    current.project.elements = current.project.elements.filter((element) => element.type !== "section");
+    const loaded = parseProjectFile(JSON.stringify(current));
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    expect(loaded.migratedFrom).toBe(1);
+    expect(loaded.file.schemaVersion).toBe(2);
+    expect(loaded.file.project.elements.some((element) => element.type === "room")).toBe(true);
+    const saved = JSON.parse(serializeProjectFile(loaded.file)) as { schemaVersion: number };
+    expect(saved.schemaVersion).toBe(2);
+  });
+
   it("rejects a newer schema without dropping data into a project", () => {
     const result = parseProjectFile(JSON.stringify({
       format: "lintel-project",
-      schemaVersion: 2,
+      schemaVersion: 3,
       project: { id: "p", name: "X", displayUnit: "mm", createdAt: "t", updatedAt: "t", elements: [] },
     }));
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.errors[0]).toMatch(/schema version 2/);
+    expect(result.errors[0]).toMatch(/schema version 3/);
     expect(result.errors[0]).toMatch(/not modified/);
   });
 

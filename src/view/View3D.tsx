@@ -163,7 +163,7 @@ function addPart(group: THREE.Group, part: ModelPart) {
     return;
   }
   if (part.kind === "wall") group.add(wallMesh(part));
-  if (part.kind === "slab" || part.kind === "room") group.add(flatMesh(part));
+  if (part.kind === "slab" || part.kind === "room" || part.kind === "join") group.add(flatMesh(part));
   if (part.kind === "door" || part.kind === "window") group.add(boxMesh(part));
 }
 
@@ -184,7 +184,15 @@ function wallMesh(part: WallPart): THREE.Group {
     shape.holes.push(path);
   }
   const geometry = new THREE.ExtrudeGeometry(shape, { depth: part.thickness, bevelEnabled: false });
-  const material = new THREE.MeshStandardMaterial({ color: 0xd4cbbd, roughness: 0.86, metalness: 0, side: THREE.DoubleSide });
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xd4cbbd,
+    roughness: 0.86,
+    metalness: 0,
+    side: THREE.DoubleSide,
+    polygonOffset: true,
+    polygonOffsetFactor: 1,
+    polygonOffsetUnits: 1,
+  });
   return withEdges(geometry, material, part.matrix, part.id, 0x3a342c);
 }
 
@@ -193,7 +201,14 @@ function flatMesh(part: FlatPart): THREE.Group {
   const geometry = new THREE.ExtrudeGeometry(shape, { depth: part.height, bevelEnabled: false });
   const material = part.kind === "room"
     ? new THREE.MeshStandardMaterial({ color: 0x6e9a78, transparent: true, opacity: 0.33, roughness: 1, depthWrite: false, side: THREE.DoubleSide })
-    : new THREE.MeshStandardMaterial({ color: 0xb7ad9e, roughness: 0.95, side: THREE.DoubleSide });
+    : new THREE.MeshStandardMaterial({
+      color: part.kind === "join" ? 0xc8bfb2 : 0xb7ad9e,
+      roughness: 0.95,
+      side: THREE.DoubleSide,
+      polygonOffset: part.kind === "join",
+      polygonOffsetFactor: 1,
+      polygonOffsetUnits: 1,
+    });
   return withEdges(geometry, material, part.matrix, part.id, part.kind === "room" ? 0x2f6a46 : 0x6d6458);
 }
 

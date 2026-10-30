@@ -1,10 +1,12 @@
-import { APP_NAME, FORMAT, SCHEMA_VERSION, isUnknownElement, type Element, type Project, type ProjectFile, type Vec2 } from "../domain/types";
+import { APP_NAME, FORMAT, MIN_SCHEMA_VERSION, SCHEMA_VERSION, isUnknownElement, type Element, type Project, type ProjectFile, type Room, type Vec2 } from "../domain/types";
 import { validateProject } from "../domain/validate";
 
 const MAX_CHARS = 20_000_000;
 const MAX_ERRORS = 40;
 
-export type LoadResult = { ok: true; file: ProjectFile } | { ok: false; errors: string[] };
+export type LoadResult =
+  | { ok: true; file: ProjectFile; migratedFrom?: number }
+  | { ok: false; errors: string[] };
 
 export function serializeProjectFile(file: ProjectFile): string {
   return `${JSON.stringify(fileToJson(file), null, 2)}\n`;
@@ -54,14 +56,15 @@ export function parseProjectFile(text: string): LoadResult {
   if (typeof parsed.schemaVersion !== "number" || !Number.isInteger(parsed.schemaVersion)) {
     return { ok: false, errors: ["schemaVersion is missing. This file was not modified."] };
   }
-  if (parsed.schemaVersion !== SCHEMA_VERSION) {
+  if (parsed.schemaVersion < MIN_SCHEMA_VERSION || parsed.schemaVersion > SCHEMA_VERSION) {
     return {
       ok: false,
       errors: [
-        `This file uses schema version ${parsed.schemaVersion}. Lintel opens version ${SCHEMA_VERSION} only. The file was not modified.`,
+        `This file uses schema version ${parsed.schemaVersion}. Lintel opens versions ${MIN_SCHEMA_VERSION} through ${SCHEMA_VERSION}. The file was not modified.`,
       ],
     };
   }
+  const migratedFrom = parsed.schemaVersion < SCHEMA_VERSION ? parsed.schemaVersion : undefined;
   if (!isRecord(parsed.project)) {
     return { ok: false, errors: ["The file has no project object. It was not modified."] };
   }
@@ -82,7 +85,7 @@ export function parseProjectFile(text: string): LoadResult {
     project,
   };
   if (Object.keys(preserved).length) file.preserved = preserved;
-  return { ok: true, file };
+  return migratedFrom ? { ok: true, file, migratedFrom } : { ok: true, file };
 }
 
 function parseProject(raw: Record<string, unknown>, add: (message: string) => void): Project | null {
@@ -136,6 +139,8 @@ function parseElement(value: unknown, index: number, add: (message: string) => v
       return parseWindow(value, id, path, add);
     case "room":
       return parseRoom(value, id, path, add);
+    case "section":
+      return parseSection(value, id, path, add);
     default:
       return { preserved: true, id, type: "preserved", foreignType: type, raw: value };
   }
@@ -193,7 +198,52 @@ function parseRoom(raw: Record<string, unknown>, id: string, path: string, add: 
   const number = reqString(raw, "number", path, add, 24);
   const outline = reqOutline(raw, path, add);
   if (!storyId || name === null || number === null || !outline) return null;
-  return withExtra({ id, type: "room", storyId, name, number, outline }, raw, ["id", "type", "storyId", "name", "number", "outline"]);
+  const room: Room = { id, type: "room", storyId, name, number, outline };
+  if (raw.source === undefined) room.source = "manual";
+  else if (raw.source === "manual" || raw.source === "derived") room.source = raw.source;
+  else {
+    add(`${path}.source must be manual or derived.`);
+    return null;
+  }
+  if (raw.boundaryWallIds !== undefined) {
+    if (!Array.isArray(raw.boundaryWallIds) || raw.boundaryWallIds.some((item) => typeof item !== "string")) {
+      add(`${path}.boundaryWallIds must be a list of wall ids.`);
+      return null;
+    }
+    room.boundaryWallIds = raw.boundaryWallIds as string[];
+  }
+  if (raw.areaMm2 !== undefined) {
+    const area = reqNumber(raw, "areaMm2", path, add);
+    if (area === null) return null;
+    room.areaMm2 = area;
+  }
+  if (raw.perimeterMm !== undefined) {
+    const perimeter = reqNumber(raw, "perimeterMm", path, add);
+    if (perimeter === null) return null;
+    room.perimeterMm = perimeter;
+  }
+  if (raw.sync === undefined) {
+    // Version 1 rooms have no sync state.
+  } else if (raw.sync === "current" || raw.sync === "detached") room.sync = raw.sync;
+  else {
+    add(`${path}.sync must be current or detached.`);
+    return null;
+  }
+  return withExtra(room, raw, ["id", "type", "storyId", "name", "number", "outline", "source", "boundaryWallIds", "areaMm2", "perimeterMm", "sync"]);
+}
+
+function parseSection(raw: Record<string, unknown>, id: string, path: string, add: (message: string) => void): Element | null {
+  const name = reqString(raw, "name", path, add, 120);
+  const start = reqVec(raw, "start", path, add);
+  const end = reqVec(raw, "end", path, add);
+  const depth = reqNumber(raw, "depth", path, add);
+  if (raw.facing !== "left" && raw.facing !== "right") add(`${path}.facing must be left or right.`);
+  if (name === null || !start || !end || depth === null || (raw.facing !== "left" && raw.facing !== "right")) return null;
+  return withExtra(
+    { id, type: "section", name, start, end, depth, facing: raw.facing },
+    raw,
+    ["id", "type", "name", "start", "end", "depth", "facing"],
+  );
 }
 
 function parseDoor(raw: Record<string, unknown>, id: string, path: string, add: (message: string) => void): Element | null {

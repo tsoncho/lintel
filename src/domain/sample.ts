@@ -110,6 +110,15 @@ export function createSampleProject(): Project {
         ],
       },
       window("win_u_s", "wall_u_s", 5000, 1800),
+      {
+        id: "section_a",
+        type: "section",
+        name: "A",
+        start: { x: 2500, y: -400 },
+        end: { x: 2500, y: 8400 },
+        depth: 8000,
+        facing: "left",
+      },
     ],
   };
 }

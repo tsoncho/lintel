@@ -198,6 +198,18 @@ export function openingsOverlap(openings: { offset: number; width: number }[]): 
   return false;
 }
 
+/** Intersection of two infinite lines. Parallel lines return null. */
+export function intersectLines(a1: Vec2, a2: Vec2, b1: Vec2, b2: Vec2): Vec2 | null {
+  const dax = a2.x - a1.x;
+  const day = a2.y - a1.y;
+  const dbx = b2.x - b1.x;
+  const dby = b2.y - b1.y;
+  const denom = dax * dby - day * dbx;
+  if (Math.abs(denom) < 1e-8) return null;
+  const t = ((b1.x - a1.x) * dby - (b1.y - a1.y) * dbx) / denom;
+  return { x: a1.x + dax * t, y: a1.y + day * t };
+}
+
 export function wallCorners(wall: Pick<Wall, "start" | "end" | "thickness">): Vec2[] | null {
   const frame = wallFrame(wall);
   if (!frame) return null;

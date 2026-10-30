@@ -5,7 +5,7 @@ import { APP_VERSION } from "../version";
 import { Mark } from "./Mark";
 import { Modal } from "./Modal";
 
-export function StartScreen() {
+export function StartScreen({ onLearn }: { onLearn: () => void }) {
   const [recent, setRecent] = useState<RecentEntry[]>([]);
   const [recovery, setRecovery] = useState<RecoveryRecord | null>(null);
   const [naming, setNaming] = useState(false);
@@ -32,6 +32,7 @@ export function StartScreen() {
           <button type="button" className="btn primary" onClick={() => setNaming(true)}>New project</button>
           <button type="button" className="btn" onClick={() => void openProject()}>Open</button>
           <button type="button" className="btn" onClick={() => void openSampleProject()}>Open Courtyard Studio</button>
+          <button type="button" className="btn" onClick={onLearn}>Learn / Учи</button>
         </div>
       </section>
       <aside className="start-side" aria-label="Recent projects">

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { addOpening, addWall, applyPropertyPatch, deleteElements, translateElements } from "./edits";
-import { undoAssistantHistory, undoHistory, pushHistory } from "./history";
+import { addDerivedRooms, addOpening, addSection, addWall, applyPropertyPatch, deleteElements, translateElements } from "./edits";
+import { undoAssistantHistory, undoHistory, pushHistory, redoHistory } from "./history";
+import { parseProjectFile, serializeProjectFile, wrapProject } from "../persistence/file";
 import { createSampleProject } from "./sample";
+import { detectSpaces } from "./spaces";
 import { validateProject } from "./validate";
 
 describe("edits and history", () => {
@@ -74,5 +76,61 @@ describe("edits and history", () => {
     if (!placed.ok) return;
     const overlap = addOpening(placed.value.project, { kind: "window", wallId: "wall_g_n", along: 5000 });
     expect(overlap.ok).toBe(false);
+  });
+
+  it("undoes and redoes a derived room and a section, then reloads them", () => {
+    const project = createSampleProject();
+    const spaces = detectSpaces(project, "story_ground");
+    expect(spaces.spaces.length).toBeGreaterThan(0);
+    const createdRooms = addDerivedRooms(
+      project,
+      spaces.spaces.slice(0, 1).map((space) => ({
+        storyId: space.storyId,
+        outline: space.outline,
+        name: "Detected",
+        number: "03",
+        boundaryWallIds: space.wallIds,
+        areaMm2: space.areaMm2,
+        perimeterMm: space.perimeterMm,
+      })),
+    );
+    expect(createdRooms.ok).toBe(true);
+    if (!createdRooms.ok) return;
+    const section = addSection(createdRooms.value, {
+      name: "B",
+      start: { x: 1000, y: -500 },
+      end: { x: 1000, y: 8500 },
+      depth: 5000,
+      facing: "right",
+    });
+    expect(section.ok).toBe(true);
+    if (!section.ok) return;
+    const withRooms = pushHistory(
+      { project, past: [], future: [] },
+      { id: "rooms", label: "Create rooms", source: "user", after: createdRooms.value },
+    );
+    const withSection = pushHistory(withRooms, {
+      id: "section",
+      label: "Add section",
+      source: "user",
+      after: section.value.project,
+    });
+    const undone = undoHistory(withSection);
+    if ("error" in undone) throw new Error(undone.error);
+    expect(undone.project.elements.some((element) => element.type === "section" && element.name === "B")).toBe(false);
+    const redone = redoHistory(undone);
+    if ("error" in redone) throw new Error(redone.error);
+    const loaded = parseProjectFile(serializeProjectFile(wrapProject(redone.project)));
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    const restored = loaded.file.project.elements.find((element) => element.type === "section" && element.name === "B");
+    expect(restored && restored.type === "section" && restored.depth === 5000 && restored.facing === "right").toBe(true);
+    const room = loaded.file.project.elements.find((element) => element.type === "room" && element.name === "Detected");
+    expect(room && room.type === "room" && room.source === "derived" && room.sync === "current" && (room.areaMm2 ?? 0) > 0).toBe(true);
+    const stepped = undoHistory(redone);
+    if ("error" in stepped) throw new Error(stepped.error);
+    const cleared = undoHistory(stepped);
+    if ("error" in cleared) throw new Error(cleared.error);
+    expect(cleared.project.elements.some((element) => element.type === "room" && element.name === "Detected")).toBe(false);
   });
 });

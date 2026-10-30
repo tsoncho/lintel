@@ -1,6 +1,7 @@
-import { ensureCcw, openingFits, openingInterval, wallFrame } from "../domain/geometry";
+import { ensureCcw, openingFits, openingInterval, pointAlongWall, wallFrame } from "../domain/geometry";
+import { joinFills, wallSolids } from "../domain/joins";
 import { hostedOpenings, projectBounds, stories } from "../domain/queries";
-import type { Bounds, Project, Vec2 } from "../domain/types";
+import type { Bounds, Project, Vec2, Wall } from "../domain/types";
 
 export interface HoleRect {
   x: number;
@@ -21,7 +22,7 @@ export interface WallPart {
 }
 
 export interface FlatPart {
-  kind: "slab" | "room";
+  kind: "slab" | "room" | "join";
   id: string;
   outline: Vec2[];
   bottomZ: number;
@@ -57,28 +58,39 @@ export function buildModel(project: Project): { parts: ModelPart[]; bounds: Boun
   const storyById = new Map(stories(project).map((story) => [story.id, story]));
   const parts: ModelPart[] = [];
   const bounds = projectBounds(project);
+  const allWalls = project.elements.filter((element): element is Wall => element.type === "wall");
+  const solids = new Map(wallSolids(allWalls).map((item) => [item.id, item]));
 
   for (const element of project.elements) {
     if (element.type === "wall") {
       const frame = wallFrame(element);
       const story = storyById.get(element.storyId);
-      if (!frame || !story) continue;
+      const solid = solids.get(element.id);
+      if (!frame || !story || !solid) continue;
       const baseZ = story.elevation + element.baseOffset;
       const holes: HoleRect[] = [];
       for (const opening of hostedOpenings(project, element.id)) {
         if (!openingFits(frame.length, opening.offset, opening.width)) continue;
         if (opening.sill + opening.height > element.height + 0.5) continue;
         const interval = openingInterval(opening.offset, opening.width);
-        const hole = insetHole(interval.start, opening.sill, opening.width, opening.height, frame.length, element.height);
+        const hole = insetHole(
+          interval.start - solid.bodyStart,
+          opening.sill,
+          opening.width,
+          opening.height,
+          solid.bodyEnd - solid.bodyStart,
+          element.height,
+        );
         if (hole) holes.push(hole);
         parts.push(openingBox(element, opening, frame, baseZ));
       }
-      const px = element.start.x - frame.nx * element.thickness / 2;
-      const py = element.start.y - frame.ny * element.thickness / 2;
+      const origin = pointAlongWall(element, solid.bodyStart);
+      const px = origin.x - frame.nx * element.thickness / 2;
+      const py = origin.y - frame.ny * element.thickness / 2;
       parts.push({
         kind: "wall",
         id: element.id,
-        length: frame.length,
+        length: solid.bodyEnd - solid.bodyStart,
         height: element.height,
         thickness: element.thickness,
         holes,
@@ -106,6 +118,28 @@ export function buildModel(project: Project): { parts: ModelPart[]; bounds: Boun
         matrix: mat4([1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0], [0, bottomZ, 0, 1]),
       });
     }
+  }
+
+  for (const fill of joinFills(allWalls)) {
+    const hosts = fill.wallIds
+      .map((id) => allWalls.find((wall) => wall.id === id))
+      .filter((wall): wall is Wall => Boolean(wall));
+    if (hosts.length < 2) continue;
+    const story = storyById.get(fill.storyId);
+    if (!story) continue;
+    const bottoms = hosts.map((wall) => story.elevation + wall.baseOffset);
+    const tops = hosts.map((wall) => story.elevation + wall.baseOffset + wall.height);
+    const bottomZ = Math.max(...bottoms);
+    const topZ = Math.min(...tops);
+    if (topZ - bottomZ < 50) continue;
+    parts.push({
+      kind: "join",
+      id: fill.id,
+      outline: ensureCcw(fill.outline),
+      bottomZ,
+      height: topZ - bottomZ,
+      matrix: mat4([1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0], [0, bottomZ, 0, 1]),
+    });
   }
 
   if (bounds) {

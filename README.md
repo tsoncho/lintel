@@ -7,11 +7,13 @@ The project file is JSON with the extension `.lintel`. Geometry is stored in mil
 ## What this version does
 
 - Create, open, and save a project, with a recent-project list and a recovery copy of unsaved work
-- Stories, gridlines, straight walls, slabs, doors, windows, and explicit rooms
+- Stories, gridlines, straight walls with cleaned corners and T-junctions, slabs, doors, windows, manual rooms, and rooms detected from wall loops
+- A section line and a generated section view of the same model
 - Selection, snap, move, reshape, properties, delete, undo, and redo
 - A 2D plan and a 3D view of the same model
 - Courtyard Studio, a two-storey sample, also stored at `samples/courtyard-studio.lintel`
 - An assistant with a fixed set of tools: summarize, list, inspect, propose one edit, and undo the last assistant edit
+- A beginner architecture course in English and Bulgarian, opened from **Learn / Учи**
 
 ## Requirements
 
@@ -30,6 +32,8 @@ npm run dev
 ```
 
 The interface opens at <http://127.0.0.1:1420>. In the browser, Save keeps the project in this browser profile and Save As also downloads a `.lintel` file.
+
+The course is on the start screen as **Learn / Учи**, and in Help while a project is open. It works offline and does not need an assistant key. Progress stays in this browser or desktop profile, not in the project file.
 
 Desktop window:
 
@@ -74,17 +78,19 @@ Edits the assistant suggests stay on a confirmation card until you press Apply. 
 
 ## Project file
 
-`.lintel` files are JSON, schema version 1, format `lintel-project`. Lintel refuses a different schema version and does not modify the file. Unknown element types and extra fields are kept and written back. Invalid known elements reject the whole file.
+`.lintel` files are JSON, format `lintel-project`, schema version 2. A version 1 file opens and is saved as version 2. A newer schema is refused and the file is left unchanged. Unknown element types and extra fields are kept and written back. Invalid known elements reject the whole file.
 
 See [docs/architecture.md](docs/architecture.md) for the coordinate system, modules, and how to add another assistant provider.
 
 ## Limits of this version
 
-- Walls are straight segments with square ends. Corners overlap instead of using a cleaned join.
+- Wall corners miter when endpoints meet within 50 mm. A stem stops at the host face. Crossing walls overlap and are not split. A gap larger than 50 mm stays open.
 - Openings belong to one wall. Swing is drawn on the plan; 3D shows the opening and a simple leaf.
-- Rooms and slabs are outlines you draw. Rooms are not detected from walls.
+- Manual rooms stay as drawn outlines. Detected rooms follow a wall loop until that loop no longer closes, and are then kept and marked detached.
+- The section view cuts walls, slabs, and openings, and shows openings in walls seen beyond the cut. Roofs, stairs, and preserved element types are omitted.
+- The beginner course explains ideas. It is not a code check, a structural design, or a licence to build.
 - Materials are names, not a library of assemblies.
-- There are no stairs, roofs, sections, elevations, sheets, schedules, or IFC exchange.
+- There are no stairs, roofs, elevations, sheets, schedules, or IFC exchange.
 - The 3D view orbits and selects. Modeling happens on the plan and in properties.
 - Undo history lasts for the session only.
 - The assistant cannot run commands, code, or arbitrary file operations, and it cannot change anything outside the four edit operations.

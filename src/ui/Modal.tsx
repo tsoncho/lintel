@@ -4,10 +4,12 @@ export function Modal({
   title,
   children,
   onClose,
+  closeLabel = "Close dialog",
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
+  closeLabel?: string;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -40,7 +42,7 @@ export function Modal({
       >
         <header className="modal-head">
           <h2>{title}</h2>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="Close dialog">
+          <button type="button" className="icon-button" onClick={onClose} aria-label={closeLabel}>
             ×
           </button>
         </header>

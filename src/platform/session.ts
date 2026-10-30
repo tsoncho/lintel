@@ -26,14 +26,17 @@ export async function goHome(): Promise<void> {
   editor.closeToStart();
 }
 
-export async function createNamed(name: string): Promise<void> {
-  if (!(await confirmLeave())) return;
+export async function createNamed(name: string): Promise<boolean> {
+  if (!(await confirmLeave())) return false;
   editor.newProject(name);
+  return true;
 }
 
-export async function openSampleProject(): Promise<void> {
-  if (!(await confirmLeave())) return;
+/** Opens the sample after the usual unsaved-work question. Returns false if the user cancels. */
+export async function openSampleProject(): Promise<boolean> {
+  if (!(await confirmLeave())) return false;
   editor.openSample();
+  return true;
 }
 
 export async function openProject(): Promise<void> {

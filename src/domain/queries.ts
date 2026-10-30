@@ -243,9 +243,24 @@ export function describeElement(project: Project, id: string): ElementFacts | nu
     case "room":
       return {
         ...base,
-        properties: { name: element.name, number: element.number },
+        properties: {
+          name: element.name,
+          number: element.number,
+          source: element.source ?? "manual",
+          sync: element.sync ?? "current",
+        },
         derived: { areaM2: Math.round((polygonArea(element.outline) / 1_000_000) * 100) / 100 },
-        note: "Area is calculated from the room outline. Lintel does not infer rooms from walls.",
+        note: element.source === "derived"
+          ? element.sync === "detached"
+            ? "This derived room no longer matches a closed wall loop. The last outline is kept."
+            : "Area is calculated from the inner face of the wall loop. It updates when those walls change."
+          : "Area is calculated from the drawn outline. This room does not follow the walls.",
+      };
+    case "section":
+      return {
+        ...base,
+        properties: { name: element.name, depthMm: element.depth, facing: element.facing },
+        note: "The section is cut from the shared model. Preserved elements are not shown.",
       };
     case "door":
     case "window":

@@ -1,7 +1,9 @@
 /** Lintel project schema. Geometry is stored in millimeters. */
 
 export const FORMAT = "lintel-project" as const;
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
+/** Version 1 projects load and are saved as version 2. Newer versions are refused. */
+export const MIN_SCHEMA_VERSION = 1;
 export const APP_NAME = "Lintel";
 
 export type DisplayUnit = "mm" | "m";
@@ -92,6 +94,31 @@ export interface Room {
   name: string;
   number: string;
   outline: Vec2[];
+  /**
+   * `manual` outlines stay where they were drawn.
+   * `derived` outlines follow a closed wall loop and are refreshed after wall edits.
+   * Missing means manual, so version 1 rooms stay put.
+   */
+  source?: "manual" | "derived";
+  /** Wall ids of the loop this derived room follows. */
+  boundaryWallIds?: string[];
+  areaMm2?: number;
+  perimeterMm?: number;
+  /** `detached` keeps the last outline when the wall loop no longer closes. */
+  sync?: "current" | "detached";
+  extra?: Record<string, unknown>;
+}
+
+export interface Section {
+  id: string;
+  type: "section";
+  name: string;
+  start: Vec2;
+  end: Vec2;
+  /** How far beyond the cut line to include, on the facing side, mm. */
+  depth: number;
+  /** Left or right of the directed line from start to end. */
+  facing: "left" | "right";
   extra?: Record<string, unknown>;
 }
 
@@ -105,7 +132,7 @@ export interface UnknownElement {
   raw: Record<string, unknown>;
 }
 
-export type Element = Story | Gridline | Wall | Slab | Door | Window | Room | UnknownElement;
+export type Element = Story | Gridline | Wall | Slab | Door | Window | Room | Section | UnknownElement;
 
 export interface Project {
   id: string;
@@ -145,6 +172,7 @@ export const KNOWN_ELEMENT_TYPES = [
   "door",
   "window",
   "room",
+  "section",
 ] as const;
 
 export type KnownElementType = (typeof KNOWN_ELEMENT_TYPES)[number];

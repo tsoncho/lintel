@@ -8,6 +8,7 @@ const TOOLS: { id: ToolId; label: string; key: string }[] = [
   { id: "door", label: "Door", key: "D" },
   { id: "window", label: "Window", key: "N" },
   { id: "room", label: "Room", key: "R" },
+  { id: "section", label: "Section", key: "C" },
 ];
 
 export function Toolbar({ assistantOpen, onToggleAssistant }: { assistantOpen: boolean; onToggleAssistant: () => void }) {
@@ -44,6 +45,7 @@ export function Toolbar({ assistantOpen, onToggleAssistant }: { assistantOpen: b
       <div className="view-toggle" role="group" aria-label="View">
         <button type="button" className={state.view === "plan" ? "active" : ""} aria-pressed={state.view === "plan"} onClick={() => editor.setView("plan")}>Plan</button>
         <button type="button" className={state.view === "model" ? "active" : ""} aria-pressed={state.view === "model"} onClick={() => editor.setView("model")}>3D</button>
+        <button type="button" className={state.view === "section" ? "active" : ""} aria-pressed={state.view === "section"} onClick={() => editor.setView("section")}>Section</button>
       </div>
       <button type="button" className={assistantOpen ? "tool active" : "tool"} aria-pressed={assistantOpen} onClick={onToggleAssistant}>
         Assistant
@@ -61,5 +63,6 @@ function ToolIcon({ id }: { id: ToolId }) {
   if (id === "slab") return <svg {...common}><rect x="2.5" y="3" width="11" height="10" fill="none" stroke="currentColor" strokeWidth="1.4" /></svg>;
   if (id === "door") return <svg {...common}><path d="M4 13 V3 H10" fill="none" stroke="currentColor" strokeWidth="1.4" /><path d="M4 13 A6 6 0 0 0 10 7" fill="none" stroke="currentColor" /></svg>;
   if (id === "window") return <svg {...common}><rect x="3" y="3" width="10" height="10" fill="none" stroke="currentColor" /><path d="M8 3 V13 M3 8 H13" stroke="currentColor" /></svg>;
-  return <svg {...common}><path d="M2 12 H14 V8 H8 V4 H2 Z" fill="none" stroke="currentColor" /></svg>;
+  if (id === "room") return <svg {...common}><path d="M2 12 H14 V8 H8 V4 H2 Z" fill="none" stroke="currentColor" /></svg>;
+  return <svg {...common}><path d="M3 13 L13 3" stroke="currentColor" strokeWidth="1.6" /><path d="M8 3 L13 3 L13 8" fill="none" stroke="currentColor" /></svg>;
 }

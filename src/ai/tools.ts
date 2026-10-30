@@ -53,6 +53,8 @@ const CHANGE_KEYS = [
   "storyId",
   "hinge",
   "swing",
+  "facing",
+  "depth",
   "start",
   "end",
 ] as const;
@@ -309,6 +311,11 @@ function parseChanges(value: unknown): PropertyPatch | string {
       patch.swing = raw;
       continue;
     }
+    if (key === "facing") {
+      if (raw !== "left" && raw !== "right") return "facing must be left or right.";
+      patch.facing = raw;
+      continue;
+    }
     if (key === "name" || key === "number" || key === "material" || key === "storyId") {
       if (typeof raw !== "string") return `${key} must be a string.`;
       if (key === "name") patch.name = raw;
@@ -327,6 +334,7 @@ function parseChanges(value: unknown): PropertyPatch | string {
     if (key === "offset") patch.offset = raw;
     if (key === "elevation") patch.elevation = raw;
     if (key === "position") patch.position = raw;
+    if (key === "depth") patch.depth = raw;
   }
   if (!Object.keys(patch).length) return "changes is empty.";
   return patch;

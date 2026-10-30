@@ -21,6 +21,7 @@ export function MenuBar({
   onShortcuts,
   onSettings,
   onAbout,
+  onLearn,
 }: {
   projectName: string;
   dirty: boolean;
@@ -41,6 +42,7 @@ export function MenuBar({
   onShortcuts: () => void;
   onSettings: () => void;
   onAbout: () => void;
+  onLearn: () => void;
 }) {
   return (
     <header className="menu-bar">
@@ -73,6 +75,7 @@ export function MenuBar({
           <Item label="Add gridline" onClick={onAddGrid} />
         </Menu>
         <Menu label="Help">
+          <Item label="Learn / Учи" onClick={onLearn} />
           <Item label="Assistant settings" onClick={onSettings} />
           <Item label="About Lintel" onClick={onAbout} />
         </Menu>
